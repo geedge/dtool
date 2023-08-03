@@ -1,10 +1,11 @@
+// dns_utils.go contains the necessary functions for building
+// and parsing a DNS packet
 package utils
 
 import (
+	"encoding/binary"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/miekg/dns"
 )
@@ -13,43 +14,144 @@ type WrongAnswerError struct {
 	Message string
 }
 
+type QueryStruct struct {
+	Id     uint16
+	RD     bool
+	Qname  string
+	Qclass uint16
+	Qtype  uint16
+}
+
+type DomainInfo struct {
+	IPList []string
+	NSList map[string][]string
+}
+
 func (e *WrongAnswerError) Error() string {
 	return fmt.Sprintf("Wrong Answer: %s", e.Message)
 }
 
-func SendQuery(addr string, dn string) (string, error) {
-	var (
-		domain  string
-		rdns_ip string
-	)
-	if dn == "timestamp" {
-		timestamp := strconv.FormatInt(time.Now().UnixNano(), 10)
-		domain = strings.Join([]string{timestamp, "-scan.echodns.xyz."}, "")
-	} else {
-		domain = strings.Join([]string{dn, ".echodns.xyz."}, "")
-	}
-	//fmt.Println(domain)
-	m := new(dns.Msg)
-	m.SetQuestion(domain, dns.TypeA)
-	m.RecursionDesired = true
+// build the question section of a dns packet
+func QuestionMaker(domain string, qclass uint16, qtype uint16) *dns.Question {
+	return &dns.Question{Name: domain, Qtype: qtype, Qclass: qclass}
+}
 
-	res, err := dns.Exchange(m, addr)
-	if err == nil {
-		if len(res.Answer) == 1 {
-			if a, ok := res.Answer[0].(*dns.A); ok {
-				rdns_ip = a.A.String()
-			} else {
-				rdns_ip = ""
-				err = &WrongAnswerError{
-					Message: "Wrong Record Type",
-				}
-			}
+// build a dns query message
+func QueryMaker(query QueryStruct) *dns.Msg {
+	msg := new(dns.Msg)
+	if query.Id < 0 {
+		msg.Id = dns.Id()
+	} else {
+		msg.Id = query.Id
+	}
+	msg.RecursionDesired = query.RD
+
+	var query_name string
+	var query_class, query_type uint16
+	msg.Question = make([]dns.Question, 1)
+	query_name = dns.Fqdn(query.Qname)
+
+	// default class INET
+	if query.Qclass == 0 {
+		query_class = 1
+	} else {
+		query_class = query.Qclass
+	}
+
+	// default type A
+	if query.Qtype == 0 {
+		query_type = 1
+	} else {
+		query_type = query.Qtype
+	}
+
+	question := QuestionMaker(query_name, query_class, query_type)
+	msg.Question[0] = *question
+	return msg
+}
+
+func ParseAResponse(msg *dns.Msg) (string, error) {
+	var ip_str string
+	if len(msg.Answer) == 1 {
+		if a, ok := msg.Answer[0].(*dns.A); ok {
+			ip_str = a.A.String()
 		} else {
-			rdns_ip = ""
-			err = &WrongAnswerError{
-				Message: "Wrong Answer Section",
+			err := &WrongAnswerError{
+				Message: "Wrong record type",
+			}
+			return ip_str, err
+		}
+	} else {
+		err := &WrongAnswerError{
+			Message: "Wrong answer section",
+		}
+		return ip_str, err
+	}
+	return ip_str, nil
+}
+
+func ParseCNAMEChain(msg *dns.Msg) (int, string, error) {
+	var cache_id int
+	var rdns_ip string
+	if len(msg.Answer) == 3 {
+		if cname, ok := msg.Answer[0].(*dns.CNAME); ok {
+			rdns_ip = strings.Join(strings.Split(strings.Split(cname.Target, ".")[0], "-")[1:], ".")
+			if a, ok := msg.Answer[2].(*dns.A); ok {
+				cache_id = int(binary.BigEndian.Uint32(a.A))
 			}
 		}
+	} else {
+		err := &WrongAnswerError{
+			Message: "Wrong record number",
+		}
+		return cache_id, rdns_ip, err
 	}
-	return rdns_ip, err
+	return cache_id, rdns_ip, nil
+}
+
+func ParseTXTResponse(msg *dns.Msg) (string, error) {
+	var txt_string string
+	if len(msg.Answer) == 1 {
+		if txt, ok := msg.Answer[0].(*dns.TXT); ok {
+			txt_string = txt.String()
+		} else {
+			err := &WrongAnswerError{
+				Message: "Wrong record type",
+			}
+			return txt_string, err
+		}
+	} else {
+		err := &WrongAnswerError{
+			Message: "wrong record number",
+		}
+		return txt_string, err
+	}
+	return txt_string, nil
+}
+
+func SendQuery(ip string, domain string) (*dns.Msg, error) {
+	addr := ip + ":53"
+	query := new(QueryStruct)
+	query.Qname = domain
+	query.RD = true
+	query.Id = dns.Id()
+	m := QueryMaker(*query)
+
+	res, err := dns.Exchange(m, addr)
+
+	return res, err
+}
+
+func SendVersionQuery(ip string) (*dns.Msg, error) {
+	addr := ip + "53"
+	query := new(QueryStruct)
+	query.Id = dns.Id()
+	query.Qname = "version.bind"
+	query.Qclass = dns.ClassCHAOS
+	query.Qtype = dns.TypeTXT
+	m := QueryMaker(*query)
+
+	res, err := dns.Exchange(m, addr)
+
+	return res, err
 }

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"dtool/prober"
-	_ "dtool/prober"
 	"dtool/utils"
-	_ "dtool/utils"
 	"errors"
 
 	"github.com/spf13/cobra"

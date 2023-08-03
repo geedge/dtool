@@ -1,56 +1,37 @@
 package prober
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"dtool/utils"
+
+	"github.com/miekg/dns"
 )
 
-type Data struct {
+type RecursiveStruct struct {
 	target string
 	dict   map[string]bool
 }
 
 var dataset map[string][]string
 
-func retrieve_ip(pool chan string, filename string) {
-	cnt := 0
-	f, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("sending msg ...")
-	reader := bufio.NewReader(f)
-	for {
-		s, err := reader.ReadString('\n')
-		if err == io.EOF {
-			break
-		}
-		s = strings.Trim(s, "\n")
-		pool <- s
-		cnt++
-		if cnt%10 == 0 {
-			fmt.Println(cnt)
-		}
-	}
-	close(pool)
-}
-
-func active_probe(n int, addr string) Data {
-	target_ip := addr[:len(addr)-3]
-	data := Data{target_ip, make(map[string]bool)}
+func active_probe(n int, addr string) RecursiveStruct {
+	target_ip := addr
+	data := RecursiveStruct{target_ip, make(map[string]bool)}
 	stop := 0
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	for i := 0; i < n; i++ {
 		subdomain := strings.Join([]string{strings.Replace(target_ip, ".", "-", -1), "echo", strconv.Itoa(i), timestamp}, "-")
-		rdns_ip, err := utils.SendQuery(addr, subdomain)
+		domain := dns.Fqdn(subdomain + ".echodns.xyz")
+		res, err := utils.SendQuery(addr, domain)
+		if err != nil {
+			stop += 1
+			continue
+		}
+		rdns_ip, err := utils.ParseAResponse(res)
 		if err == nil {
 			data.dict[rdns_ip] = true
 		} else {
@@ -63,11 +44,10 @@ func active_probe(n int, addr string) Data {
 	return data
 }
 
-func upstream_prober(ip_pool chan string, data_pool chan Data, wg *sync.WaitGroup) {
+func upstream_prober(ip_pool chan string, data_pool chan RecursiveStruct, wg *sync.WaitGroup) {
 	for {
 		if s, ok := <-ip_pool; ok {
-			addr := s + ":53"
-			data := active_probe(20, addr)
+			data := active_probe(20, s)
 			if data.dict != nil {
 				data_pool <- data
 			}
@@ -78,14 +58,14 @@ func upstream_prober(ip_pool chan string, data_pool chan Data, wg *sync.WaitGrou
 	wg.Done()
 }
 
-func create_probers(num int, ip_pool chan string, data_pool chan Data, wg *sync.WaitGroup) {
+func create_probers(num int, ip_pool chan string, data_pool chan RecursiveStruct, wg *sync.WaitGroup) {
 	for i := 0; i < num; i++ {
 		wg.Add(1)
 		go upstream_prober(ip_pool, data_pool, wg)
 	}
 }
 
-func store_data(pool chan Data, wg *sync.WaitGroup) {
+func store_data(pool chan RecursiveStruct, wg *sync.WaitGroup) {
 	wg.Add(1)
 	for {
 		var temp []string
@@ -106,27 +86,26 @@ func store_data(pool chan Data, wg *sync.WaitGroup) {
 func Get_upstream_file(filename string, output string, prober_num int) {
 	dataset = map[string][]string{}
 	ip_pool := make(chan string, 500)
-	data_pool := make(chan Data, 200)
+	data_pool := make(chan RecursiveStruct, 200)
 	var probe_tasks sync.WaitGroup
 	var store_task sync.WaitGroup
 
-	go retrieve_ip(ip_pool, filename)
+	go utils.RetrieveLines(ip_pool, filename)
 	create_probers(prober_num, ip_pool, data_pool, &probe_tasks)
 	go store_data(data_pool, &store_task)
 	probe_tasks.Wait()
 	close(data_pool)
 	store_task.Wait()
-	utils.OutputJSON(dataset, output)
+	utils.OutputJSON(dataset, output, "")
 }
 
 func Get_upstream_ip(ip string) {
 	dataset = make(map[string][]string)
 	var temp []string
-	addr := ip + ":53"
-	data := active_probe(10, addr)
+	data := active_probe(10, ip)
 	for rdns := range data.dict {
 		temp = append(temp, rdns)
 	}
 	dataset[data.target] = temp
-	utils.OutputJSON(dataset, "-")
+	utils.OutputJSON(dataset, "-", "    ")
 }
