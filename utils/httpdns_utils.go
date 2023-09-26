@@ -5,7 +5,7 @@ import (
 	"crypto/des"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -75,7 +75,7 @@ func SendTencentHttpdnsQuery() {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("read content failed. Error: %s\n", err)
 		return
@@ -102,7 +102,7 @@ func SendAlicloudHttpdnsQurey() {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("read content failed. Error: %s\n", err)
 		return

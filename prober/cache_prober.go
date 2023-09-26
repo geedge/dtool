@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 const query_num = 20
@@ -15,7 +17,7 @@ type CacheStruct struct {
 	dict   map[int]map[string]bool
 }
 
-func RecursiveCacheProbe(ip string) CacheStruct {
+func RecursiveCacheProbe(ip string, sld string) CacheStruct {
 	data := CacheStruct{ip, make(map[int]map[string]bool)}
 	stop := 0
 	time_now := strconv.FormatInt(time.Now().Unix(), 10)
@@ -24,7 +26,7 @@ func RecursiveCacheProbe(ip string) CacheStruct {
 			break
 		}
 		subdomain := strings.Join([]string{strings.Replace(ip, ".", "-", -1), "fwd", strconv.Itoa(i), time_now}, "-")
-		domain := subdomain + ".echodns.xyz."
+		domain := dns.Fqdn(subdomain + "." + sld)
 		res, err := utils.SendQuery(ip, domain)
 		if err != nil {
 			//fmt.Printf("Error sending query: %s\n", err)
@@ -49,7 +51,7 @@ func RecursiveCacheProbe(ip string) CacheStruct {
 func RecursiveCacheTest(ip string, num int) {
 	res := make(map[string]map[int][]string)
 	temp := make(map[int][]string)
-	data := RecursiveCacheProbe(ip)
+	data := RecursiveCacheProbe(ip, "echodns.xyz")
 	if len(data.dict) > 0 {
 		for cache_id := range data.dict {
 			for rdns := range data.dict[cache_id] {

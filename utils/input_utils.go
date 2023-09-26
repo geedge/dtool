@@ -24,7 +24,7 @@ func RetrieveLines(pool chan string, filename string) {
 		s = strings.Trim(s, "\n")
 		pool <- s
 		cnt++
-		if cnt%10 == 0 {
+		if cnt%1000 == 0 {
 			fmt.Println(cnt)
 		}
 	}

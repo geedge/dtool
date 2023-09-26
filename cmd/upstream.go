@@ -27,7 +27,7 @@ input target can be added as an argument or as a file
 
 func upstream(cmd *cobra.Command, args []string) {
 	if len(args) > 1 {
-		panic(errors.New("too many arguments!"))
+		panic(errors.New("too many arguments"))
 	} else if len(args) == 1 {
 		if utils.IsValidIP(args[0]) {
 			prober.Get_upstream_ip(args[0])

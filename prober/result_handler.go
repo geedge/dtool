@@ -26,6 +26,8 @@ func OutputHandler(data interface{}) (string, error) {
 		}
 		result[value.target] = temp
 		output_str, err = utils.ToJSON(result, "")
+	case SVCBResult:
+		output_str, err = utils.ToJSON(data, "")
 	}
 	return output_str, err
 }
