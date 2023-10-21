@@ -75,6 +75,10 @@ func QueryMaker(query QueryStruct) *dns.Msg {
 	return msg
 }
 
+func ParseRcode(msg *dns.Msg) int {
+	return msg.MsgHdr.Rcode
+}
+
 func ParseAResponse(msg *dns.Msg) (string, error) {
 	var ip_str string
 	if len(msg.Answer) == 1 {
@@ -134,7 +138,22 @@ func ParseTXTResponse(msg *dns.Msg) (string, error) {
 	return txt_string, nil
 }
 
-func SendQuery(ip string, domain string) (*dns.Msg, error) {
+func SendQuery(ip, domain, port string, qtype, qclass uint16) (*dns.Msg, error) {
+	addr := ip + ":" + port
+	query := new(QueryStruct)
+	query.Qname = domain
+	query.RD = true
+	query.Qtype = qtype
+	query.Qclass = uint16(qclass)
+	query.Id = dns.Id()
+	m := QueryMaker(*query)
+
+	res, err := dns.Exchange(m, addr)
+
+	return res, err
+}
+
+func SendAQuery(ip string, domain string) (*dns.Msg, error) {
 	addr := ip + ":53"
 	query := new(QueryStruct)
 	query.Qname = domain

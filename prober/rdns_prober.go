@@ -26,7 +26,7 @@ func active_probe(n int, addr string) RecursiveStruct {
 	for i := 0; i < n; i++ {
 		subdomain := strings.Join([]string{strings.Replace(target_ip, ".", "-", -1), "echo", strconv.Itoa(i), timestamp}, "-")
 		domain := dns.Fqdn(subdomain + ".echodns.xyz")
-		res, err := utils.SendQuery(addr, domain)
+		res, err := utils.SendAQuery(addr, domain)
 		if err != nil {
 			stop += 1
 			continue

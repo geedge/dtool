@@ -27,7 +27,7 @@ func RecursiveCacheProbe(ip string, sld string) CacheStruct {
 		}
 		subdomain := strings.Join([]string{strings.Replace(ip, ".", "-", -1), "fwd", strconv.Itoa(i), time_now}, "-")
 		domain := dns.Fqdn(subdomain + "." + sld)
-		res, err := utils.SendQuery(ip, domain)
+		res, err := utils.SendAQuery(ip, domain)
 		if err != nil {
 			//fmt.Printf("Error sending query: %s\n", err)
 			stop += 1
