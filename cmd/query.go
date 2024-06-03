@@ -97,7 +97,7 @@ func queryTest(cmd *cobra.Command, args []string) {
 func init() {
 	queryCmd.Flags().BoolVarP(&query_random_prefix, "random", "R", false, "random query name")
 	queryCmd.Flags().StringVarP(&query_port, "port", "p", "53", "query target port")
-	queryCmd.Flags().StringVarP(&query_name, "name", "d", "example.com", "query name in DNS requests")
+	queryCmd.Flags().StringVarP(&query_name, "name", "d", ".example.com", "query name in DNS requests")
 	queryCmd.Flags().Uint16VarP(&query_type, "type", "t", 1, "target record type")
 	queryCmd.Flags().Uint16VarP(&query_class, "class", "c", 1, "target record class")
 	queryCmd.Flags().IntVarP(&query_rate, "rate", "r", 10, "request rate (packets per second)")
